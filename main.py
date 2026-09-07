@@ -20,10 +20,12 @@ import os
 import sqlite3
 import logging
 import time
+import threading
 from dataclasses import dataclass, field
 from io import BytesIO
 from datetime import datetime, timedelta
 
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -35,6 +37,23 @@ from telegram.ext import (
 )
 from google import genai
 from google.genai import types
+
+# =========================================================
+# ФЕЙКОВЫЙ ВЕБ-СЕРВЕР ДЛЯ RENDER
+# (бесплатный Web Service на Render требует открытый порт для health check)
+# =========================================================
+
+web_app = Flask(__name__)
+
+
+@web_app.route("/")
+def health_check():
+    return "Bot is alive", 200
+
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
 
 # =========================================================
 # КОНФИГУРАЦИЯ
@@ -451,6 +470,9 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     conn = db_connect()
+
+    # Запускаем фейковый веб-сервер в фоновом потоке для Render
+    threading.Thread(target=run_web_server, daemon=True).start()
 
     app = (
         Application.builder()
